@@ -220,6 +220,11 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return this;
     }
 
+
+    /**
+     * 从Object的wait
+     *
+     * */
     @Override
     public Promise<V> await() throws InterruptedException {
         if (isDone()) {
@@ -392,6 +397,9 @@ public class DefaultPromise<V> extends AbstractFuture<V> implements Promise<V> {
         return executor;
     }
 
+    /**自己阻塞自己不行，会成为死锁
+     *
+     * */
     protected void checkDeadLock() {
         EventExecutor e = executor();
         if (e != null && e.inEventLoop()) {

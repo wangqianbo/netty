@@ -115,6 +115,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         if (group == null) {
             return null;
         }
+
         Boolean pinEventExecutor = channel.config().getOption(ChannelOption.SINGLE_EVENTEXECUTOR_PER_GROUP);
         if (pinEventExecutor != null && !pinEventExecutor) {
             return group.next();
@@ -152,6 +153,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
             newCtx = newContext(group, name, handler);
 
+            /**
+             * 双向列表结构
+             * */
             addFirst0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.
@@ -175,6 +179,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                 return this;
             }
         }
+        /**
+         * 触发handlerAdded 事件
+         * */
         callHandlerAdded0(newCtx);
         return this;
     }

@@ -73,6 +73,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
      */
     private static final int INIT = 0;
 
+    /**
+     * context 的inbound 和 outbound属性本质上是Handler的，这么说context和handler应该是一一对应的关系。
+     * */
     private final boolean inbound;
     private final boolean outbound;
     private final DefaultChannelPipeline pipeline;
@@ -737,6 +740,9 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     }
 
     private void invokeWrite(Object msg, ChannelPromise promise) {
+        /**
+         * invokeHandler 判断是否执行该Context关联的Handler，invokeWrite0(msg, promise); 是用户实现业务逻辑的地方。
+         * */
         if (invokeHandler()) {
             invokeWrite0(msg, promise);
         } else {
@@ -820,6 +826,15 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
         AbstractChannelHandlerContext next = findContextOutbound();
         final Object m = pipeline.touch(msg, next);
         EventExecutor executor = next.executor();
+        /**
+         * 判断executor是否是当前线程（calling Thread），如果是，则执行代码块，否则使用Executor调度执行
+         * （延后执行，可以把 Executor想象成生产者/消费者线程调度队列）。
+         * 因为EventLoop可能服务多个Channel，next.invoke***接下来就有可能执行用户自定义的代码，假使用户的业务逻辑需要执行很长时间，
+         * 那么带来的问题是，所有基于该EventLoop驱动的Channel都会被阻塞。就像Android的UI线程被阻塞一样。
+         * 因此长时间执行的业务逻辑应该在用户自定义的线程模型，或者说线程执行容器空间内。[这里是优化的点，比如可以使用协程减少线程的使用]
+         *
+         * Promise 其实理解为该事件被处理完后的一个通知，创建于发起事件的时候
+        * */
         if (executor.inEventLoop()) {
             if (flush) {
                 next.invokeWriteAndFlush(m, promise);

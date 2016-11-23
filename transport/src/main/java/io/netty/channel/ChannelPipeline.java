@@ -368,7 +368,7 @@ public interface ChannelPipeline
      * @param handlers  the handlers to insert last
      *
      */
-    ChannelPipeline addLast(ChannelHandler... handlers);
+    ChannelPipeline  addLast(ChannelHandler... handlers);
 
     /**
      * Inserts {@link ChannelHandler}s at the last position of this pipeline.

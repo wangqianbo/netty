@@ -21,6 +21,9 @@ final class DefaultChannelHandlerContext extends AbstractChannelHandlerContext {
 
     private final ChannelHandler handler;
 
+    /**
+     * Context 里包含了 pipeline executor handler，但是其仅能有一个handler这个应该是肯定的
+     * */
     DefaultChannelHandlerContext(
             DefaultChannelPipeline pipeline, EventExecutor executor, String name, ChannelHandler handler) {
         super(pipeline, executor, name, isInbound(handler), isOutbound(handler));

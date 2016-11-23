@@ -214,9 +214,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         void forceFlush();
     }
-
+    /**该类对Java Channel的lifecycle进行了抽象，使其融入Netty Channel的lifecycle*/
     protected abstract class AbstractNioUnsafe extends AbstractUnsafe implements NioUnsafe {
 
+        // 移除不感兴趣的事件（这里是读操作）
         protected final void removeReadOp() {
             SelectionKey key = selectionKey();
             // Check first if the key is still valid as it may be canceled as part of the deregistration
@@ -251,14 +252,21 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                 }
 
                 boolean wasActive = isActive();
+                /** doConnect 根据不同的网络，执行不同的connect逻辑，并监听OP_CONNECT事件
+                 {@link java.nio.channels.SocketChannel#connect}, 只有连接成功才会返回ture。
+                 这就意味着，non-blocking 模式下，会立马返回false.
+                 */
+                // 阻塞模式下,连接成功，返回true
                 if (doConnect(remoteAddress, localAddress)) {
                     fulfillConnectPromise(promise, wasActive);
                 } else {
+                    /**non-blocking 模式下，返回false，剩下的逻辑就是设置<code>connectPromise</code>。*/
                     connectPromise = promise;
                     requestedRemoteAddress = remoteAddress;
 
                     // Schedule connect timeout.
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
+                    // 处理超时
                     if (connectTimeoutMillis > 0) {
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
                             @Override
@@ -273,6 +281,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                         }, connectTimeoutMillis, TimeUnit.MILLISECONDS);
                     }
 
+                    //处理cancel
                     promise.addListener(new ChannelFutureListener() {
                         @Override
                         public void operationComplete(ChannelFuture future) throws Exception {
@@ -307,6 +316,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
             // Regardless if the connection attempt was cancelled, channelActive() event should be triggered,
             // because what happened is what happened.
+            /**channelActive 连接成功后，channelActive立马被调用 */
             if (!wasActive && active) {
                 pipeline().fireChannelActive();
             }
@@ -337,6 +347,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
             try {
                 boolean wasActive = isActive();
+                /**如果此时connect还没有连接成功，是会抛出异常的，如果连接成功，则触发channelActive事件*/
                 doFinishConnect();
                 fulfillConnectPromise(connectPromise, wasActive);
             } catch (Throwable t) {
@@ -384,6 +395,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         boolean selected = false;
         for (;;) {
             try {
+                //? ops = 0 ? 此时还没有任何感兴趣的事件，需要根据需求加入op
                 selectionKey = javaChannel().register(eventLoop().selector, 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -406,6 +418,8 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+
+    /**加入OP_READ，开始接受read事件*/
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called
@@ -431,6 +445,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
      * Finish the connect
      */
     protected abstract void doFinishConnect() throws Exception;
+
 
     /**
      * Returns an off-heap copy of the specified {@link ByteBuf}, and releases the original one.
