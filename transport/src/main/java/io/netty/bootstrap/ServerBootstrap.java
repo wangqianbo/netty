@@ -137,6 +137,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         return this;
     }
 
+
+    /**
+     *init 是在bind()的时候调用，因为这里是ServerBootstrap，因此，Channel指的是Server的Channel
+     * （及服务端的socket句柄）。
+     * */
     @Override
     void init(Channel channel) throws Exception {
         final Map<ChannelOption<?>, Object> options = options0();
@@ -153,6 +158,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             }
         }
 
+        /**
+         *服务端的channel的pipeline
+         * */
         ChannelPipeline p = channel.pipeline();
 
         final EventLoopGroup currentChildGroup = childGroup;
@@ -166,6 +174,12 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             currentChildAttrs = childAttrs.entrySet().toArray(newAttrArray(childAttrs.size()));
         }
 
+        /**
+         * ChannelInitializer 是InboundHandler，其目的是为channel加入用户自定义初始化部分。很明显其也能被加入多个
+         * 其调用时机是 channelRegistered 或者 channelAdded。其仅被执行一次，执行后就从channel的
+         * Pipeline 中删除.
+         * 此处ChannelInitializer的作用是，补全该channel的pipeline，
+         * */
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(Channel ch) throws Exception {
@@ -175,6 +189,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
                     pipeline.addLast(handler);
                 }
 
+                /**
+                 * ServerBootstrapAcceptor 是inboundHandler，它为什么要在pipeline 的最后？inbound操作是从pipeline的头
+                 * 到尾的流。
+                 * */
                 // We add this handler via the EventLoop as the user may have used a ChannelInitializer as handler.
                 // In this case the initChannel(...) method will only be called after this method returns. Because
                 // of this we need to ensure we add our handler in a delayed fashion so all the users handler are
@@ -229,6 +247,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             this.childAttrs = childAttrs;
         }
 
+        /**
+         * 对于ServerSocketChannel来说，此处的Read为accept channel.
+         * 该处的channelRead功能是为accept channel,初始化并注册到相应的多路复用器selector上
+         * */
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {

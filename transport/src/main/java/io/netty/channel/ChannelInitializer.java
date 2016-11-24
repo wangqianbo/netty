@@ -106,8 +106,14 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
         }
     }
 
+    /**
+     *
+     * */
     @SuppressWarnings("unchecked")
     private boolean initChannel(ChannelHandlerContext ctx) throws Exception {
+        /**
+         * 逻辑只会被执行一次，用户通过implement initChannel，加入channel用户自定义的部分
+         * */
         if (initMap.putIfAbsent(ctx, Boolean.TRUE) == null) { // Guard against re-entrance.
             try {
                 initChannel((C) ctx.channel());
@@ -116,6 +122,9 @@ public abstract class ChannelInitializer<C extends Channel> extends ChannelInbou
                 // We do so to prevent multiple calls to initChannel(...).
                 exceptionCaught(ctx, cause);
             } finally {
+                /**
+                 * 初始化后，该ChannelInitializer会从ChannelPipeline中删除
+                 * */
                 remove(ctx);
             }
             return true;

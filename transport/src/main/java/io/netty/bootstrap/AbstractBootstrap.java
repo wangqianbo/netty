@@ -268,6 +268,16 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     /**
      * Create a new {@link Channel} and bind it.
+     *
+     * 总结下bind的流程
+     * Bootstrap.bind()
+     * 1. 首先根据配置的参数，创建一个Channel，并初始化（设置参数，配置handler，context，EventLoop）
+     * 2. 然后调用java Channel的register. 由于该过程需要在该Channel的EventLoop上执行，
+     * 然而调用bind的操作一般是在main线程上，因此需要调度到EventLoop上，因此需要Promise以便register成功后
+     * 通知main。
+     * 3. register成功后，如果Channel配置了Auto Read 那么还要在该Channel的多路复用器上，设置相应的读感兴趣事件(OP_ACCEPT 或者 OP_READ)
+     * 最后执行Channel的pipeline
+     * 4. java channel Register 后，会执行channel.doBind,当然其执行要在channel的eventLoop中
      */
     public ChannelFuture bind(SocketAddress localAddress) {
         validate();
@@ -278,6 +288,16 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        /**
+         * 我们调用bind的时候，一般情况下是在main里，必然和channel的EventLoop不是一个线程。
+         * 因此要调度执行该任务，因此也就需要promise，以便完成后通知main线程
+         * 执行java channel的register
+         *
+         * 功能：
+         * 1. 创建channel 并初始化（一些参数）
+         * 2. 从EventLoopGroup中获取一个EventLoop 并与新创建的channel进行绑定。
+         * 3. 执行Java channel Register
+         * */
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
@@ -290,6 +310,12 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
+
+            /**
+             * 基本上会走这个分支，
+             * 1. 添加一个回调，当register成功后，执行java channel bind操作，也就是说，ServerBootstrap的bind，其实包含了
+             * java channel的register和bind。
+             * */
             // Registration future is almost always fulfilled already, but just in case it's not.
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             regFuture.addListener(new ChannelFutureListener() {
@@ -313,10 +339,17 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         }
     }
 
+    /**
+     * 这里应该是ServerChannel 的Register吧。是阻塞还是非阻塞？
+     * */
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
             channel = channelFactory.newChannel();
+            // 不同的连接，初始化的方式不一样（Server 和 client）
+            /**
+             * 根据配置初始化channel的一些配置参数，这个时候还没有EventLoop
+             * */
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
@@ -326,7 +359,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
         }
-
+        /**
+         * 执行group的register，主要是赋给channel其EventLoop
+         * */
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -350,6 +385,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
     abstract void init(Channel channel) throws Exception;
 
+    /**
+     *
+     *
+     * */
     private static void doBind0(
             final ChannelFuture regFuture, final Channel channel,
             final SocketAddress localAddress, final ChannelPromise promise) {
@@ -360,6 +399,16 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    /**
+                     * 在此之前java Channel 的Register操作已经完成，现在要做的就是执行Channel的Pipeline
+                     * Handler 总体上分为两类，分别设置在启动辅助类（child）及其父类（parent）。两类Handler的用途不同，
+                     * 子类中的handler是NioServerSocketChannel对应的Handler，父类中的Han是客户端新接入的连接
+                     * SocketChannel对应的ChannelPipeline的Handler。
+                     * 本质却别是，ServerBootStrap中的Handler是NioServerSocketChannel使用的，所有连接改进监听
+                     * 端口的SocketChannel（另一端对应Client）都会执行它，父类AbstractBootStrap中的Handler是个工厂类，它为每个新进入的客户端
+                     * 创建一个新的Handler。
+                     * */
+
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
                     promise.setFailure(regFuture.cause());

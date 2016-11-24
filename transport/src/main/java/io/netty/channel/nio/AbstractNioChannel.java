@@ -419,7 +419,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     }
 
 
-    /**加入OP_READ，开始接受read事件*/
+    /**
+     * 这里对于不同个Channel，readInterestOp还不一样，比如对于ServerSocketChannel，使其OP_ACCEPT
+     * 但是对于accept的channel，因为其不需要ACCEPT因此，这里为OP_READ
+     * */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called
